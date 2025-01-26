@@ -10,6 +10,7 @@ We provide a set of [tools](https://inspect.ai-safety-institute.org.uk/tools.htm
 ### Installation
 ```
 pip install multiagent-inspect
+pip install openai # Or any other LLM library. See https://inspect.ai-safety-institute.org.uk/models.html
 ```
 
 ### Usage
