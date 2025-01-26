@@ -10,11 +10,12 @@ We provide a set of [tools](https://inspect.ai-safety-institute.org.uk/tools.htm
 ### Installation
 ```
 pip install multiagent-inspect
-pip install openai # Or any other LLM library. See https://inspect.ai-safety-institute.org.uk/models.html
+pip install openai
 ```
+Instead of `openai`, you can use any other model provider. See https://inspect.ai-safety-institute.org.uk/models.html.
 
 ### Usage
-```
+```python
 from inspect_ai.solver import basic_agent
 from utils.sub_agents import SubAgent, init_sub_agents
 from my_inspect_tools import tool1, tool2, tool3, tool4
