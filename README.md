@@ -17,7 +17,7 @@ Instead of `openai`, you can use any other model provider. See https://inspect.a
 ### Usage
 ```python
 from inspect_ai.solver import basic_agent
-from utils.sub_agents import SubAgent, init_sub_agents
+from multiagent_inspect import SubAgent, init_sub_agents
 from my_inspect_tools import tool1, tool2, tool3, tool4
 
 sub_agent_1 = SubAgent(tools=[tool1, tool2], max_steps=5)
