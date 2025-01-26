@@ -12,7 +12,7 @@ class SubAgent():
     def __init__(self, 
                  agent_id: str = None,
                  max_steps: int = 10,
-                 model: str = "openai/gpt-4o-mini-2024-07-18-free",
+                 model: str = "openai/gpt-4o",
                  public_description: str = "",
                  internal_description: str = "",
                  tools: list[Tool] = None,
