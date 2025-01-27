@@ -1,35 +1,43 @@
 from inspect_ai.tool import tool, Tool, ToolDef
-from inspect_ai.model._chat_message import ChatMessageSystem, ChatMessageUser
+from inspect_ai.model._chat_message import ChatMessageSystem, ChatMessageUser, ChatMessageAssistant
 from inspect_ai.util import store
 from inspect_ai.model._model import get_model
 from inspect_ai.model._call_tools import call_tools
-
+from inspect_ai.solver import (
+    Generate,
+    TaskState,
+    solver,
+)
 from inspect_ai.solver._basic_agent import DEFAULT_SYSTEM_MESSAGE 
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class SubAgentConfig:
+    agent_id: Optional[str] = None
+    max_steps: int = 10
+    model: Optional[str] = None
+    public_description: str = ""
+    internal_description: str = ""
+    tools: Optional[list[Tool]] = None
+    metadata: Optional[dict] = None
 
 class SubAgent():
     _id_counter = 1
 
-    def __init__(self, 
-                 agent_id: str = None,
-                 max_steps: int = 10,
-                 model: str = "openai/gpt-4o",
-                 public_description: str = "",
-                 internal_description: str = "",
-                 tools: list[Tool] = None,
-                 metadata: dict = None):
-        # Auto-generate ID if none provided
-        if agent_id is None:
-            agent_id = f"{SubAgent._id_counter:03d}"
+    def __init__(self, config: SubAgentConfig):
+        if config.agent_id is None:
+            config.agent_id = f"{SubAgent._id_counter:03d}"
             SubAgent._id_counter += 1
             
         sys_msg = DEFAULT_SYSTEM_MESSAGE.format(submit='_end_run')
-        sys_msg += f"\n\nOnly attempt tasks which you think you can do with your limited set of tools. After running a task, you might be asked questions about it. Only answer things that you know that you have done.\n\n{internal_description}"
-        self.agent_id = agent_id
-        self.max_steps = max_steps
-        self.public_description = public_description
-        self.model = model
-        self.tools = tools
-        self.metadata = metadata
+        sys_msg += f"\n\nOnly attempt tasks which you think you can do with your limited set of tools. After running a task, you might be asked questions about it. Only answer things that you know that you have done.\n\n{config.internal_description}"
+        self.agent_id = config.agent_id
+        self.max_steps = config.max_steps
+        self.public_description = config.public_description
+        self.model = config.model
+        self.tools = config.tools
+        self.metadata = config.metadata
         self.messages = [ChatMessageSystem(content=sys_msg)]
 
     def __str__(self):
@@ -87,6 +95,8 @@ async def _run_logic(sub_agent: SubAgent, instructions: str):
 
             if any(tool_result.function == "_end_run" for tool_result in tool_results):
                 break
+    if steps == sub_agent.max_steps - 1:
+        sub_agent.messages.append(ChatMessageAssistant(content="I have reached the maximum number of steps. I will stop here."))
 
     await _update_store(sub_agent)
     return f"Sub agent ran for {steps} steps. You can now ask it questions."
@@ -102,17 +112,23 @@ async def _chat_logic(sub_agent: SubAgent, question: str):
     await _update_store(sub_agent)
     return output.message.text
 
-def init_sub_agents(sub_agents: list[SubAgent]):
-    if len(sub_agents) < 1:
-        return []
+@solver
+def init_sub_agents(sub_agent_configs: list[SubAgentConfig]):
+    async def solve(state: TaskState, generate: Generate) -> TaskState:
+        if len(sub_agent_configs) < 1:
+            return state
 
-    store().set("sub_agents", {sub_agent.agent_id: sub_agent for sub_agent in sub_agents})
+        sub_agents = [SubAgent(config) for config in sub_agent_configs]
+        store().set("sub_agents", {agent.agent_id: agent for agent in sub_agents})
 
-    if len(sub_agents) > 1:
-        return [sub_agent_specs(), run_sub_agent(), chat_with_sub_agent()]
-    elif len(sub_agents) == 1:
-        return [sub_agent_specs(single_sub_agent=True), run_sub_agent(single_sub_agent=True), chat_with_sub_agent(single_sub_agent=True)]
-
+        existing_tools = state.tools    
+        if len(sub_agents) > 1:
+            existing_tools.extend([sub_agent_specs(), run_sub_agent(), chat_with_sub_agent()])
+        elif len(sub_agents) == 1:
+            existing_tools.extend([sub_agent_specs(single_sub_agent=True), run_sub_agent(single_sub_agent=True), chat_with_sub_agent(single_sub_agent=True)])
+        
+        return state
+    return solve
 @tool
 def sub_agent_specs(single_sub_agent: bool = False) -> Tool:
     if single_sub_agent:

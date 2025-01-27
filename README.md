@@ -17,15 +17,15 @@ Instead of `openai`, you can use any other model provider. See https://inspect.a
 ### Usage
 ```python
 from inspect_ai.solver import basic_agent
-from multiagent_inspect import SubAgent, init_sub_agents
+from multiagent_inspect import SubAgentConfig, init_sub_agents
 from my_inspect_tools import tool1, tool2, tool3, tool4
 
-sub_agent_1 = SubAgent(tools=[tool1, tool2], max_steps=5)
-sub_agent_2 = SubAgent(tools=[tool3], model="openai/gpt-4o")
+sub_agent_1 = SubAgentConfig(tools=[tool1, tool2], max_steps=5)
+sub_agent_2 = SubAgentConfig(tools=[tool3], model="openai/gpt-4o")
 
-main_agent_tools = [tool4] + init_sub_agents([sub_agent_1, sub_agent_2])
 main_agent=basic_agent(
-    tools=main_agent_tools,
+    init=init_sub_agents([sub_agent_1, sub_agent_2]),
+    tools=[tool4],
 )
 ```
 
