@@ -121,14 +121,15 @@ def init_sub_agents(sub_agent_configs: list[SubAgentConfig]):
         sub_agents = [SubAgent(config) for config in sub_agent_configs]
         store().set("sub_agents", {agent.agent_id: agent for agent in sub_agents})
 
-        existing_tools = state.tools    
         if len(sub_agents) > 1:
-            existing_tools.extend([sub_agent_specs(), run_sub_agent(), chat_with_sub_agent()])
+            state.tools.extend([sub_agent_specs(), run_sub_agent(), chat_with_sub_agent()])
         elif len(sub_agents) == 1:
-            existing_tools.extend([sub_agent_specs(single_sub_agent=True), run_sub_agent(single_sub_agent=True), chat_with_sub_agent(single_sub_agent=True)])
+            state.tools.extend([sub_agent_specs(single_sub_agent=True), run_sub_agent(single_sub_agent=True), chat_with_sub_agent(single_sub_agent=True)])
+        
         
         return state
     return solve
+
 @tool
 def sub_agent_specs(single_sub_agent: bool = False) -> Tool:
     if single_sub_agent:
@@ -151,8 +152,8 @@ def sub_agent_specs(single_sub_agent: bool = False) -> Tool:
             Returns:
                 str: Specifications of the sub agents.
             """
-            sub_agents = store().get("sub_agents", [])
-            return "\n".join([str(sub_agent) for sub_agent in sub_agents])
+            sub_agents = store().get("sub_agents", {})
+            return "\n".join([str(sub_agent) for sub_agent in sub_agents.values()])
     return execute
 
 @tool
