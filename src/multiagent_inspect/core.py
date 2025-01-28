@@ -1,5 +1,10 @@
 from inspect_ai.tool import tool, Tool, ToolDef
-from inspect_ai.model._chat_message import ChatMessageSystem, ChatMessageUser, ChatMessageAssistant
+from inspect_ai.model._chat_message import (
+    ChatMessage,
+    ChatMessageSystem,
+    ChatMessageUser,
+    ChatMessageAssistant,
+)
 from inspect_ai.util import store
 from inspect_ai.model._model import get_model
 from inspect_ai.model._call_tools import call_tools
@@ -10,7 +15,7 @@ from inspect_ai.solver import (
 )
 from inspect_ai.solver._basic_agent import DEFAULT_SYSTEM_MESSAGE 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List
 
 @dataclass
 class SubAgentConfig:
@@ -38,7 +43,7 @@ class SubAgent():
         self.model = config.model
         self.tools = config.tools
         self.metadata = config.metadata
-        self.messages = [ChatMessageSystem(content=sys_msg)]
+        self.messages: List[ChatMessage] = [ChatMessageSystem(content=sys_msg)]
 
     def __str__(self):
         msg = (
@@ -63,7 +68,7 @@ def _end_run() -> Tool:
         return f"Run ended with reason: {stop_reason}"
     return execute
 
-async def _get_agent(sub_agent_id: str = None) -> SubAgent:
+async def _get_agent(sub_agent_id: Optional[str] = None) -> Optional[SubAgent]:
     sub_agents = store().get("sub_agents", {})
 
     if sub_agent_id is None:
@@ -81,15 +86,17 @@ async def _update_store(sub_agent: SubAgent):
 async def _run_logic(sub_agent: SubAgent, instructions: str):
     sub_agent.messages.append(ChatMessageUser(content=instructions))
 
+    tools = sub_agent.tools or []
+    tools.append(_end_run())
     for steps in range(sub_agent.max_steps):
         output = await get_model(sub_agent.model).generate(
-            input=sub_agent.messages, tools=sub_agent.tools + [_end_run()]
+            input=sub_agent.messages, tools=tools
         )
         sub_agent.messages.append(output.message)
 
         if output.message.tool_calls:
             tool_results = await call_tools(
-                output.message, sub_agent.tools + [_end_run()]
+                output.message, tools
             )
             sub_agent.messages.extend(tool_results)
 
@@ -133,7 +140,7 @@ def init_sub_agents(sub_agent_configs: list[SubAgentConfig]):
 @tool
 def sub_agent_specs(single_sub_agent: bool = False) -> Tool:
     if single_sub_agent:
-        async def execute():
+        async def execute_single():
             """Show the specifications of the sub agent.
 
             Use this tool to learn what the sub agent can be used for.
@@ -143,8 +150,9 @@ def sub_agent_specs(single_sub_agent: bool = False) -> Tool:
             """
             agent = await _get_agent()
             return str(agent)
+        return execute_single
     else:
-        async def execute():
+        async def execute_multi():
             """Lists all available sub agents with their specifications.
 
             Use this tool to find the right sub agent to use for the task at hand.
@@ -154,21 +162,24 @@ def sub_agent_specs(single_sub_agent: bool = False) -> Tool:
             """
             sub_agents = store().get("sub_agents", {})
             return "\n".join([str(sub_agent) for sub_agent in sub_agents.values()])
-    return execute
+        return execute_multi
 
 @tool
 def run_sub_agent(single_sub_agent: bool = False) -> Tool:
     if single_sub_agent:
-        async def execute(instructions: str):
+        async def execute_single(instructions: str):
             """Runs a sub agent. Note you will not know what the sub agent did. To know that, you need to chat with it.
 
             Args:
                 instructions (str): Instructions for the sub agent.
             """
             agent = await _get_agent()
+            if agent is None:
+                return f"No agent found"
             return await _run_logic(agent, instructions)
+        return execute_single
     else:
-        async def execute(sub_agent_id: str, instructions: str):
+        async def execute_multi(sub_agent_id: str, instructions: str):
             """Runs a sub agent. Note you will not know what the sub agent did. To know that, you need to chat with it.
 
             Args:
@@ -176,13 +187,15 @@ def run_sub_agent(single_sub_agent: bool = False) -> Tool:
                 instructions (str): Instructions for the sub agent.
             """
             agent = await _get_agent(sub_agent_id)
+            if agent is None:
+                return f"No agent found with id {sub_agent_id}"
             return await _run_logic(agent, instructions)
-    return execute
+        return execute_multi
 
 @tool
 def chat_with_sub_agent(single_sub_agent: bool = False) -> Tool:
     if single_sub_agent:
-        async def execute(question: str):
+        async def execute_single(question: str):
             """Chats with a sub agent that previously was run with some instructions.
 
             Args:
@@ -192,9 +205,12 @@ def chat_with_sub_agent(single_sub_agent: bool = False) -> Tool:
                 str: Response from the sub agent.
             """
             agent = await _get_agent()
+            if agent is None:
+                return f"No agent found"
             return await _chat_logic(agent, question)
+        return execute_single
     else:
-        async def execute(sub_agent_id: str, question: str):
+        async def execute_multi(sub_agent_id: str, question: str):
             """Chats with a sub agent that previously was run with some instructions.
 
             Args:
@@ -205,5 +221,7 @@ def chat_with_sub_agent(single_sub_agent: bool = False) -> Tool:
                 str: Response from the sub agent.
             """
             agent = await _get_agent(sub_agent_id)
+            if agent is None:
+                return f"No agent found with id {sub_agent_id}"
             return await _chat_logic(agent, question)
-    return execute
+        return execute_multi

@@ -26,6 +26,7 @@ async def test_state(state: TaskState):
     assert len(tools) == 3, f"Expected 3 tools, got {len(tools)}"
 
     specs_str = await tools[0]()
+    specs_str = str(specs_str)
 
     assert "id1" in specs_str and "001" in specs_str, "Agent IDs should be in the specifications"
     assert "Test agent" in specs_str, "Public description should be in the specifications"
@@ -40,9 +41,11 @@ async def test_chat(state: TaskState):
 
     question = "Are you ready to do a task for me? If so, answer 'YES' and nothing else."
     result = await tools[2]("id1", question)
+    result = str(result)
     assert result.lower() == "yes", "Chat logic failed"
 
     agent1 = store().get("sub_agents", {}).get("id1")
+    assert agent1 is not None, "Agent id1 not found"
 
     assert len(agent1.messages) == 3, "Agent should have 3 messages"
     assert type(agent1.messages[1]) == ChatMessageUser, "Second message should be a user message"
@@ -56,6 +59,7 @@ async def test_run(state: TaskState):
     await tools[1]("id1", "Start by saying exactly 'I accept the task'. Then use the dummy tool and then end the run immediately (stop reason is the output of the dummy tool).")
 
     agent1 = store().get("sub_agents", {}).get("id1")
+    assert agent1 is not None, "Agent id1 not found"
 
     tool_count = 0
     for msg in agent1.messages:
