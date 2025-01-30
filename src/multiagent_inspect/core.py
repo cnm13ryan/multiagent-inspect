@@ -5,7 +5,7 @@ from inspect_ai.model._chat_message import (
     ChatMessageUser,
     ChatMessageAssistant,
 )
-from inspect_ai.util import store, subtask
+from inspect_ai.util import store
 from inspect_ai.model._model import get_model
 from inspect_ai.model._call_tools import call_tools
 from inspect_ai.solver import (
@@ -83,7 +83,6 @@ async def _update_store(sub_agent: SubAgent):
     sub_agents[sub_agent.agent_id] = sub_agent
     store().set("sub_agents", sub_agents)
 
-@subtask
 async def _run_logic(sub_agent: SubAgent, instructions: str):
     sub_agent.messages.append(ChatMessageUser(content=instructions))
 
@@ -109,7 +108,6 @@ async def _run_logic(sub_agent: SubAgent, instructions: str):
     await _update_store(sub_agent)
     return f"Sub agent ran for {steps} steps. You can now ask it questions."
 
-@subtask
 async def _chat_logic(sub_agent: SubAgent, question: str):
     sub_agent.messages.append(ChatMessageUser(content=question))
 
