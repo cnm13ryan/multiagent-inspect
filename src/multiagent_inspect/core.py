@@ -17,6 +17,8 @@ from inspect_ai.solver._basic_agent import DEFAULT_SYSTEM_MESSAGE
 from dataclasses import dataclass
 from typing import Optional, List
 
+from inspect_ai.log import transcript
+
 @dataclass
 class SubAgentConfig:
     agent_id: Optional[str] = None
@@ -94,6 +96,9 @@ async def _run_logic(sub_agent: SubAgent, instructions: str):
         )
         sub_agent.messages.append(output.message)
 
+        with transcript().step(f"sub-agent-{sub_agent.agent_id}-step-{steps}"):
+            transcript().info(output.message.text)
+
         if output.message.tool_calls:
             tool_results = await call_tools(
                 output.message, tools
@@ -126,6 +131,7 @@ def init_sub_agents(sub_agent_configs: list[SubAgentConfig]):
             return state
 
         sub_agents = [SubAgent(config) for config in sub_agent_configs]
+        print(f"Sub agents: {sub_agents}")
         store().set("sub_agents", {agent.agent_id: agent for agent in sub_agents})
 
         if len(sub_agents) > 1:
