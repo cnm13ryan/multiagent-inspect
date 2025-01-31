@@ -88,7 +88,7 @@ async def _update_store(sub_agent: SubAgent):
 async def _run_logic(sub_agent: SubAgent, instructions: str):
     sub_agent.messages.append(ChatMessageUser(content=instructions))
 
-    tools = sub_agent.tools or []
+    tools = (sub_agent.tools or []).copy()
     tools.append(_end_run())
     for steps in range(sub_agent.max_steps):
         output = await get_model(sub_agent.model).generate(
@@ -131,7 +131,6 @@ def init_sub_agents(sub_agent_configs: list[SubAgentConfig]):
             return state
 
         sub_agents = [SubAgent(config) for config in sub_agent_configs]
-        print(f"Sub agents: {sub_agents}")
         store().set("sub_agents", {agent.agent_id: agent for agent in sub_agents})
 
         if len(sub_agents) > 1:
