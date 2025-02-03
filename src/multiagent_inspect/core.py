@@ -4,6 +4,7 @@ from inspect_ai.model._chat_message import (
     ChatMessageSystem,
     ChatMessageUser,
     ChatMessageAssistant,
+    ChatMessageTool,
 )
 from inspect_ai.util import store
 from inspect_ai.model._model import get_model
@@ -67,13 +68,18 @@ class SubAgent():
 def _trim_messages(messages: List[ChatMessage], max_tokens: int) -> List[ChatMessage]:
     """
     If the total tokens in messages exceed max_tokens, remove the earliest (non-system) messages until within limit.
+    Additionally, ensures that the first entry after the system message is not a tool call.
     Always keep the first message (assumed to be the system message).
     """
     def total_tokens(msgs: List[ChatMessage]) -> int:
         return sum(len(TOKEN_ENCODING.encode(msg.text)) for msg in msgs)
     
-    # Remove items starting at index 1 (skip the system message) until under limit
+    # First, remove messages (starting at index 1) until the token count is within limit.
     while total_tokens(messages) > max_tokens and len(messages) > 1:
+        messages.pop(1)
+
+    # Then, ensure that the first message after system is not a tool call.
+    while len(messages) > 1 and isinstance(messages[1], ChatMessageTool):
         messages.pop(1)
     return messages
 

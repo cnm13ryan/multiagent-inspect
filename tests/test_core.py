@@ -99,6 +99,34 @@ async def test_trim_messages_no_removal(state: TaskState):
     trimmed = _trim_messages(messages.copy(), max_tokens)
     assert trimmed == messages, "Messages should not be removed if under limit"
 
+async def test_tool_first_message_removed(state: TaskState):
+    from inspect_ai.model._chat_message import ChatMessageTool
+    sys_msg = ChatMessageSystem(content="System message")
+    tool_msg = ChatMessageTool(content="Tool message", function="dummy_tool")
+    user_msg = ChatMessageUser(content="User message")
+    messages = [sys_msg, tool_msg, user_msg]
+    # Set max_tokens high enough so token count is not the driving factor.
+    max_tokens = sum(len(TOKEN_ENCODING.encode(m.text)) for m in messages) + 100
+    trimmed = _trim_messages(messages.copy(), max_tokens)
+    assert len(trimmed) == 2, "Expected the tool message to be removed, only system and user message should remain."
+    assert not isinstance(trimmed[1], ChatMessageTool), "The first message after system should not be a tool call."
+    assert trimmed[1].text == user_msg.text, "After removal, user message should follow system message."
+
+async def test_multiple_tool_calls_removed(state: TaskState):
+    from inspect_ai.model._chat_message import ChatMessageTool
+    sys_msg = ChatMessageSystem(content="System")
+    tool_msg1 = ChatMessageTool(content="Tool1", function="dummy_tool")
+    tool_msg2 = ChatMessageTool(content="Tool2", function="dummy_tool")
+    user_msg = ChatMessageUser(content="User")
+    messages = [sys_msg, tool_msg1, tool_msg2, user_msg]
+    # Set max_tokens high enough so token count is not the driving factor.
+    max_tokens = sum(len(TOKEN_ENCODING.encode(m.text)) for m in messages) + 100
+    trimmed = _trim_messages(messages.copy(), max_tokens)
+    # We expect that both tool messages are removed, leaving only system and user messages.
+    assert len(trimmed) == 2, "Expected both tool messages to be removed, leaving system and user messages."
+    assert trimmed[0].text == sys_msg.text, "System message must be preserved"
+    assert trimmed[1].text == user_msg.text, "User message should follow system message after removing tool messages"
+
 @solver
 def test_solver():
     async def solve(state: TaskState, generate: Generate) -> TaskState:
@@ -115,7 +143,9 @@ if __name__ == "__main__":
         test_chat,
         test_run,
         test_trim_messages_removes,
-        test_trim_messages_no_removal
+        test_trim_messages_no_removal,
+        test_tool_first_message_removed,
+        test_multiple_tool_calls_removed
     ]
 
     dataset = []
