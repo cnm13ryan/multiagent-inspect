@@ -16,6 +16,8 @@ from inspect_ai.solver import (
 from inspect_ai.solver._basic_agent import DEFAULT_SYSTEM_MESSAGE 
 from dataclasses import dataclass
 from typing import Optional, List
+import tiktoken
+TOKEN_ENCODING = tiktoken.get_encoding("o200k_base")
 
 from inspect_ai.log import transcript
 
@@ -28,6 +30,7 @@ class SubAgentConfig:
     internal_description: str = ""
     tools: Optional[list[Tool]] = None
     metadata: Optional[dict] = None
+    max_token: int = 70000
 
 class SubAgent():
     _id_counter = 1
@@ -45,6 +48,7 @@ class SubAgent():
         self.model = config.model
         self.tools = config.tools
         self.metadata = config.metadata
+        self.max_token = config.max_token
         self.messages: List[ChatMessage] = [ChatMessageSystem(content=sys_msg)]
 
     def __str__(self):
@@ -59,6 +63,20 @@ class SubAgent():
             msg += f"Tools: {tool_names}\n"
 
         return msg
+
+def _trim_messages(messages: List[ChatMessage], max_tokens: int) -> List[ChatMessage]:
+    """
+    If the total tokens in messages exceed max_tokens, remove the earliest (non-system) messages until within limit.
+    Always keep the first message (assumed to be the system message).
+    """
+    def total_tokens(msgs: List[ChatMessage]) -> int:
+        return sum(len(TOKEN_ENCODING.encode(msg.text)) for msg in msgs)
+    
+    # Remove items starting at index 1 (skip the system message) until under limit
+    while total_tokens(messages) > max_tokens and len(messages) > 1:
+        messages.pop(1)
+    return messages
+
 
 @tool
 def _end_run() -> Tool:
@@ -91,6 +109,8 @@ async def _run_logic(sub_agent: SubAgent, instructions: str):
     tools = (sub_agent.tools or []).copy()
     tools.append(_end_run())
     for steps in range(sub_agent.max_steps):
+        sub_agent.messages = _trim_messages(sub_agent.messages, sub_agent.max_token)
+        
         output = await get_model(sub_agent.model).generate(
             input=sub_agent.messages, tools=tools
         )
@@ -115,7 +135,8 @@ async def _run_logic(sub_agent: SubAgent, instructions: str):
 
 async def _chat_logic(sub_agent: SubAgent, question: str):
     sub_agent.messages.append(ChatMessageUser(content=question))
-
+    sub_agent.messages = _trim_messages(sub_agent.messages, sub_agent.max_token)
+    
     output = await get_model(sub_agent.model).generate(
         input=sub_agent.messages
     )

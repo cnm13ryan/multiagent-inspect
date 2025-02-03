@@ -3,13 +3,15 @@ from pathlib import Path
 import sys
 import inspect
 from inspect_ai.tool import tool
-from inspect_ai.model._chat_message import ChatMessageUser, ChatMessageAssistant, ChatMessageTool
+from inspect_ai.model._chat_message import ChatMessageUser, ChatMessageAssistant, ChatMessageTool, ChatMessageSystem
 from inspect_ai.solver import TaskState, Generate
 from inspect_ai.util import store
 from inspect_ai import Task, eval
 from inspect_ai.dataset import Sample
 from inspect_ai.solver import solver
 from inspect_ai.solver._chain import chain
+
+from multiagent_inspect.core import _trim_messages, TOKEN_ENCODING
 
 sys.path.append(str(Path(__file__).parent.parent))
 from multiagent_inspect import SubAgentConfig, init_sub_agents
@@ -71,6 +73,32 @@ async def test_run(state: TaskState):
                 assert "dummy123" in msg.text, "End run tool should contain the output of the dummy tool"
             tool_count += 1
 
+async def test_trim_messages_removes(state: TaskState):
+    sys_msg = ChatMessageSystem(content="S" * 50)
+    user_msg1 = ChatMessageUser(content="U" * 100)
+    asst_msg1 = ChatMessageAssistant(content="A" * 100)
+    user_msg2 = ChatMessageUser(content="U" * 100)
+    messages = [sys_msg, user_msg1, asst_msg1, user_msg2]
+    sys_tokens = len(TOKEN_ENCODING.encode(sys_msg.text))
+    rest_tokens = sum(len(TOKEN_ENCODING.encode(m.text)) for m in messages[1:])
+    max_tokens = sys_tokens + rest_tokens - 10
+    
+    trimmed = _trim_messages(messages.copy(), max_tokens)
+    trimmed_total = sum(len(TOKEN_ENCODING.encode(m.text)) for m in trimmed)
+    assert trimmed_total <= max_tokens, f"Trimmed total tokens {trimmed_total} exceeds max_tokens {max_tokens}"
+    assert len(trimmed) < len(messages), "Expected some messages to be trimmed"
+    assert trimmed[0].text == sys_msg.text, "System message must be preserved"
+    assert trimmed[1].text != user_msg1.text, "User message should be trimmed"
+
+async def test_trim_messages_no_removal(state: TaskState):
+    sys_msg = ChatMessageSystem(content="Hello system")
+    user_msg = ChatMessageUser(content="Hello user")
+    messages = [sys_msg, user_msg]
+    total_tokens = sum(len(TOKEN_ENCODING.encode(m.text)) for m in messages)
+    max_tokens = total_tokens + 10  # Allow room so nothing is trimmed
+    trimmed = _trim_messages(messages.copy(), max_tokens)
+    assert trimmed == messages, "Messages should not be removed if under limit"
+
 @solver
 def test_solver():
     async def solve(state: TaskState, generate: Generate) -> TaskState:
@@ -85,7 +113,9 @@ if __name__ == "__main__":
     all_tests = [
         test_state,
         test_chat,
-        test_run
+        test_run,
+        test_trim_messages_removes,
+        test_trim_messages_no_removal
     ]
 
     dataset = []
