@@ -70,12 +70,17 @@ def _trim_messages(messages: List[ChatMessage], max_tokens: int) -> List[ChatMes
     If the total tokens in messages exceed max_tokens, remove the earliest (non-system) messages until within limit.
     Additionally, ensures that the first entry after the system message is not a tool call.
     Always keep the first message (assumed to be the system message).
+    Also limits total messages to 2000 by removing oldest non-system messages if exceeded.
     """
     def total_tokens(msgs: List[ChatMessage]) -> int:
         return sum(len(TOKEN_ENCODING.encode(msg.text)) for msg in msgs)
     
     # First, remove messages (starting at index 1) until the token count is within limit.
     while total_tokens(messages) > max_tokens and len(messages) > 1:
+        messages.pop(1)
+
+    # Then, ensure we don't exceed 2000 messages total
+    while len(messages) > 2000:
         messages.pop(1)
 
     # Then, ensure that the first message after system is not a tool call.

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "multiagent-inspect"
-version = "0.0.6"
+version = "0.0.7"
 authors = [
     {name = "Lukas Petersson", email = "lukas.petersson.1999@gmail.com"}
 ]
